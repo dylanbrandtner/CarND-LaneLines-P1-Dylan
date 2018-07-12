@@ -1,56 +1,70 @@
 # **Finding Lane Lines on the Road** 
-[![Udacity - Self-Driving Car NanoDegree](https://s3.amazonaws.com/udacity-sdc/github/shield-carnd.svg)](http://www.udacity.com/drive)
 
-<img src="examples/laneLines_thirdPass.jpg" width="480" alt="Combined Image" />
+**Finding Lane Lines on the Road**
 
-Overview
+The goals / steps of this project are the following:
+* Make a pipeline that finds lane lines on the road
+* Reflect on your work in a written report
+
+[//]: # (Image References)
+
+[firstpass]: ./examples/solidWhiteFirstPass.jpg "First Pass"
+[secondpass]: ./examples/solidWhiteCurveExtrapolated.jpg "Extrapolated"
+[challenge1]: ./examples/Challenge_FirstPass.jpg "Challenge First Pass"
+[challenge2]: ./examples/Challenge_FirstPass_NotExtrapolated.jpg "Challenge First Pass Minus Extrapolate"
+[testImage]: ./examples/solidWhiteMod.jpg "Modified test image"
+[challenge3]: ./examples/Challenge_Improved.jpg "Challenge improved"
+[challenge4]: ./examples/Challenge_ExtraLines.jpg "Challenge Extra Lines"
+
 ---
 
-When we drive, we use our eyes to decide where to go.  The lines on the road that show us where the lanes are act as our constant reference for where to steer the vehicle.  Naturally, one of the first things we would like to do in developing a self-driving car is to automatically detect lane lines using an algorithm.
+### Reflection
 
-In this project you will detect lane lines in images using Python and OpenCV.  OpenCV means "Open-Source Computer Vision", which is a package that has many useful tools for analyzing images.  
+### 1. Initial Pipeline
 
-To complete the project, two files will be submitted: a file containing project code and a file containing a brief write up explaining your solution. We have included template files to be used both for the [code](https://github.com/udacity/CarND-LaneLines-P1/blob/master/P1.ipynb) and the [writeup](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md).The code file is called P1.ipynb and the writeup template is writeup_template.md 
+My pipeline consisted of essentially what was contained in the lesson.  It followed these 5 steps:
+1. Grayscale the image
+2. Gaussian Blur
+3. Canny Edge Detection
+4. Region Mask
+5. Hough Transform
 
-To meet specifications in the project, take a look at the requirements in the [project rubric](https://review.udacity.com/#!/rubrics/322/view)
+All of this was fairly simple to achieve using the provided helper functions and suggested threshold values from the course material.
+
+The initial image as a result of this looked like this:
+![alt text][firstpass]
+
+After this, I updated the draw_lines function with an "extrapolate" option.  This first split the lines into left lines and right lines using the slope, took the average of those groups into a single line, and then extrapolated that line.  To extrapolate the line, I took the y endpoints from the region of interest, and then solved for the x values using the original slope formula (x1 = x2 - (y2 -y1)/slope).  The result was this:
+![alt text][secondpass]
+
+This allowed me to draw lane lines successfully on all input images and most videos.  However, this solution started to show some cracks when applied to the challenge video.  The first thing I noticed was that my region of interest was based on hardcoded pixel values, and the challenge video was a different resolution than the other images and videos  (1280x720 vs 960x650).  I found this by updating my draw_lines() function to have an option to draw the region of interest.  This option also allowed me to tune the region of interest a bit more overall to better encapsulate the lanes in all images and videos.  However, it was quickly apparent that my extrapolated lane lines were not correct:
+![alt text][challenge1]
+
+I first turned off extrapolation, just to see what lines were being detected.  It turned out, lines were being found everywhere, from the median divider, to shadows, the front of the hood, etc:
+![alt text][challenge1]
+
+I suspect some of this could have been cleaned up by tuning the pipeline thresholds/variables, but instead I took the approach of logically separating the lines based on context.  To assist with this, I edit the initial test image to add some "fake" lane lines that I wanted to ignore:
+![alt text][testImage]
+
+First, I removed all the horizontal lines by filtering any line with a slope to close to 0 (i.e. less than .4 or greater than -.4).  This was a huge portion of the noise in the challenge video.  To get rid of the parallel noise lines, I searched the web for the best ways to remove outliers, and came across the [Median Absolute Deviation](https://en.wikipedia.org/wiki/Median_absolute_deviation) (i.e. "MAD") algorithm.  There were many freely available python snippets of this algorithm which I put together into my own function.   Using these methods, I was able to prune the fake lines from my test image easily, and adding back extrapolation lead to the real lane lines.  
+
+When re-applying this to the challenge video, the result was much improved: 
+![alt text][challenge3]
+
+However, I still noticed the lines jumping in some spots.  I turned the extrapolation off again, and found some trouble spots where my outlier detection was failing:
+![alt text][challenge4]
+
+It seemed there were some situations where more non-lane lines were detected than the lane lines themselves.  This lead to the lane lines being the outliner.  This seemed like a reasonable endpoint for my current approach.
 
 
-Creating a Great Writeup
----
-For this project, a great writeup should provide a detailed response to the "Reflection" section of the [project rubric](https://review.udacity.com/#!/rubrics/322/view). There are three parts to the reflection:
+### 2. Identify potential shortcomings with your current pipeline
 
-1. Describe the pipeline
-
-2. Identify any shortcomings
-
-3. Suggest possible improvements
-
-We encourage using images in your writeup to demonstrate how your pipeline works.  
-
-All that said, please be concise!  We're not looking for you to write a book here: just a brief description.
-
-You're not required to use markdown for your writeup.  If you use another method please just submit a pdf of your writeup. Here is a link to a [writeup template file](https://github.com/udacity/CarND-LaneLines-P1/blob/master/writeup_template.md). 
+As discussed above, my approach for the most accurate lane lines was to simply filter non-lane lines based on the context.  This was mostly effective, however, parallel edges detected by the pipeline within the region of interest could in some cases be more prevalent than the lane itself.  Without any history, the line is re-drawn on each frame, so temporary changes in the edge detection have a major impact on this approach.  
 
 
-The Project
----
+### 3. Suggest possible improvements to your pipeline
 
-## If you have already installed the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) you should be good to go!   If not, you should install the starter kit to get started on this project. ##
-
-**Step 1:** Set up the [CarND Term1 Starter Kit](https://classroom.udacity.com/nanodegrees/nd013/parts/fbf77062-5703-404e-b60c-95b78b2f3f9e/modules/83ec35ee-1e02-48a5-bdb7-d244bd47c2dc/lessons/8c82408b-a217-4d09-b81d-1bda4c6380ef/concepts/4f1870e0-3849-43e4-b670-12e6f2d4b7a7) if you haven't already.
-
-**Step 2:** Open the code in a Jupyter Notebook
-
-You will complete the project code in a Jupyter notebook.  If you are unfamiliar with Jupyter Notebooks, check out <A HREF="https://www.packtpub.com/books/content/basics-jupyter-notebook-and-python" target="_blank">Cyrille Rossant's Basics of Jupyter Notebook and Python</A> to get started.
-
-Jupyter is an Ipython notebook where you can run blocks of code and see results interactively.  All the code for this project is contained in a Jupyter notebook. To start Jupyter in your browser, use terminal to navigate to your project directory and then run the following command at the terminal prompt (be sure you've activated your Python 3 carnd-term1 environment as described in the [CarND Term1 Starter Kit](https://github.com/udacity/CarND-Term1-Starter-Kit/blob/master/README.md) installation instructions!):
-
-`> jupyter notebook`
-
-A browser window will appear showing the contents of the current directory.  Click on the file called "P1.ipynb".  Another browser window will appear displaying the notebook.  Follow the instructions in the notebook to complete the project.  
-
-**Step 3:** Complete the project and submit both the Ipython notebook and the project writeup
-
-## How to write a README
-A well written README file can enhance your project and portfolio.  Develop your abilities to create professional README files by completing [this free course](https://www.udacity.com/course/writing-readmes--ud777).
-
+To improve upon the above lane detection pipeline, I could have taken a few approaches:
+* _Reduce noise by tuning the region of interest specifically for the car:_  For example, in the challenge video, the camera seemed mounted further back than the others, and slightly off to the right.  In a real car, the region of interest could be tuned more accurately to avoid reading edges in other lanes and/or the shoulder.  It could also be slightly forward to avoid noise from the hood of the car (refections, hood edge, etc), and with less distance to avoid seeing edges in other lanes when the road curves.  I did not tune this in my pipeline so that it could remain applicable to all input images/videos.
+* _Tune edge detection for specific colors:_ To avoid detecting shadows, road imperfections, etc, the pipeline could have been tuned to ignore edges on colors other than yellow or white.
+* _Use historical data:_ This is obviously outside the scope of this exercise, but I suspect the next step that a real autonomous car engineer would take is to use the previously detected lanes as a predictor for the next frame.  Real road lanes don't suddenly shift.  They follow a relatively smooth path.  Thus, the newly detected line could be drawn with the same slope as the previous frame, and adjustments could be made based on newly detected edges with some pre-defined weight.  Again, major outliers could be rejected and-or the entire result could be thrown out until the next frame.  Again, since lanes follow a smooth path, even at highway speeds a car could afford to drop a few frames of lane detection and just stay on its original path.
